@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C and Build outputs
+build/
+dist/
+*.o
+*.so
+*.dylib
+*.a
+bin/
+lib/
+
+# Clean compiler intermediate files
+*.abc
+*.obj
+*.s
+*.a
+*.pbc
+Clean System Files/
+
+# Editor / IDE artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Test coverage and reports
+.coverage
+htmlcov/
+.pytest_cache/
