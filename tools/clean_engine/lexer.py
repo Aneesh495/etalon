@@ -19,6 +19,7 @@ TOKEN_SPEC = [
     ("INT",           r"[-+]?[0-9]+"),
     ("ARROW",         r"->"),
     ("DARROW",        r"=>"),
+    ("MACRO_DEF",     r":=="),
     ("DCOLON",        r"::"),
     ("BAR",           r"\|"),
     ("EQ",            r"="),

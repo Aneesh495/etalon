@@ -9,8 +9,14 @@ Distributed under the MIT License.
 
 import sys
 from pathlib import Path
-from .parser import parse_clean_source
-from .uniqueness_checker import UniquenessChecker
+
+# Add project root to sys.path if running as standalone script
+repo_root = Path(__file__).resolve().parent.parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+from tools.clean_engine.parser import parse_clean_source
+from tools.clean_engine.uniqueness_checker import UniquenessChecker
 
 def run_verification(clean_src_dir: Path) -> int:
     clean_files = sorted(list(clean_src_dir.rglob("*.dcl")) + list(clean_src_dir.rglob("*.icl")))

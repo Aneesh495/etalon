@@ -47,24 +47,53 @@ class UniquenessChecker:
     def check_function_uniqueness(self, fn_def: FunctionDef, unique_arg_indices: List[int], sig: TypeSig):
         for idx in unique_arg_indices:
             if idx < len(fn_def.patterns):
-                var_name = fn_def.patterns[idx]
-                # Check occurrence count in body string
+                pat = fn_def.patterns[idx]
+                var_name = pat.split("=:")[0].strip()
                 body = fn_def.body
-                if isinstance(body, str):
-                    # Simple token-level occurrence count
+                if not isinstance(body, str):
+                    continue
+
+                # Clean supports branching (| guard = expr), where each alternative branch
+                # evaluates independently. Extract separate branches.
+                if "|" in body:
+                    branches = []
+                    parts = body.split("|")
+                    for p in parts:
+                        if "=" in p:
+                            eq_parts = p.split("=")
+                            # The first part is the guard condition; subsequent parts are branch expressions
+                            for ep in eq_parts[1:]:
+                                branches.append(ep)
+                        else:
+                            branches.append(p)
+
+                    for branch in branches:
+                        tokens = [t.strip("(),;{}[]") for t in branch.split()]
+                        occ = sum(1 for t in tokens if t == var_name)
+                        if occ > 1:
+                            if branch.count(f"{{ {var_name} &") == 1 and occ <= 2:
+                                continue
+                            self.violations.append(
+                                UniquenessViolation(
+                                    function_name=fn_def.name,
+                                    var_name=var_name,
+                                    reason=f"Unique variable '{var_name}' referenced {occ} times in single branch"
+                                )
+                            )
+                else:
                     tokens = [t.strip("(),;{}[]") for t in body.split()]
                     occurrences = sum(1 for t in tokens if t == var_name)
-                    # In a linear uniqueness thread, the variable should appear once,
-                    # or if updated into a new state (e.g. { state & field = val }), exactly once.
                     if occurrences > 1:
-                        # Allow record update pattern: { var & ... }
-                        if body.count(f"{{ {var_name} &") == 1 and occurrences == 2:
-                            # Standard Clean record update: { var & field = val }
+                        if body.count(f"{{ {var_name} &") == 1 and occurrences <= 2:
+                            continue
+                        # Also check if var is threaded in a let-expression (e.g. let bm1 = ... in { bm1 & ... })
+                        if f"{var_name}." in body:
+                            # Record field access before record update
                             continue
                         self.violations.append(
                             UniquenessViolation(
                                 function_name=fn_def.name,
                                 var_name=var_name,
-                                reason=f"Unique variable '{var_name}' referenced {occurrences} times (violates single-reference rule)"
+                                reason=f"Unique variable '{var_name}' referenced {occurrences} times"
                             )
                         )

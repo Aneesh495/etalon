@@ -78,11 +78,19 @@ class Parser:
                 self.parse_type_or_record_decl(module)
                 continue
 
-            # Function signature or definition
+            # Constant macro definition: name :== val
             if tok.kind in ("IDENT", "OP"):
-                # Lookahead to see if next token is DCOLON (signature) or something else (def)
                 next_tok = self.peek(1)
-                if next_tok and next_tok.kind == "DCOLON":
+                if next_tok and next_tok.kind == "MACRO_DEF":
+                    self.pos += 2  # consume name and :==
+                    # consume remainder of macro expression on same line
+                    while self.pos < len(self.tokens):
+                        t = self.peek()
+                        if not t or (t.col == 1 and t.kind in ("IDENT", "DCOLON", "KEYWORD")):
+                            break
+                        self.pos += 1
+                    continue
+                elif next_tok and next_tok.kind == "DCOLON":
                     sig = self.parse_signature()
                     module.signatures[sig.name] = sig
                 else:
@@ -124,8 +132,18 @@ class Parser:
                 self.pos += 1
 
     def parse_type_expr(self) -> TypeExpr:
-        is_unique = self.match("STAR")
-        is_strict = self.match("BANG")
+        is_unique = False
+        is_strict = False
+
+        while True:
+            if self.match("STAR"):
+                is_unique = True
+            elif self.match("BANG"):
+                is_strict = True
+            elif self.match("DOT"):
+                pass
+            else:
+                break
         
         tok = self.peek()
         if not tok:
@@ -150,11 +168,11 @@ class Parser:
 
         tok = self.expect("IDENT")
         name = tok.value
-        # Check if type has type parameters (e.g. Maybe a)
+        # Check if type has type parameters on the SAME LINE (e.g. Maybe a)
         args = []
         while self.pos < len(self.tokens):
             next_t = self.peek()
-            if next_t and next_t.kind == "IDENT" and next_t.value[0].islower():
+            if next_t and next_t.line == tok.line and next_t.kind == "IDENT" and next_t.value[0].islower():
                 args.append(TypeExpr(name=next_t.value))
                 self.pos += 1
             else:
@@ -193,12 +211,17 @@ class Parser:
             # Algebraic data type: Cons1 | Cons2 arg | ...
             constructors = []
             while self.pos < len(self.tokens):
-                cname = self.expect("IDENT").value
+                cname_tok = self.expect("IDENT")
+                cname = cname_tok.value
+                cons_line = cname_tok.line
                 cargs = []
                 while self.pos < len(self.tokens):
                     t = self.peek()
-                    if t and t.kind in ("IDENT", "BANG", "STAR", "LPAREN", "LBRACKET") and t.value not in ("|", ";"):
+                    if t and t.col > 1 and t.kind in ("IDENT", "BANG", "STAR", "LPAREN", "LBRACKET") and t.value not in ("|", ";"):
                         if t.kind == "KEYWORD":
+                            break
+                        # In Clean, constructor arguments must not be another constructor on a new line
+                        if t.line != cons_line and self.peek(1) and self.peek(1).value == "=":
                             break
                         cargs.append(self.parse_type_expr())
                     else:
@@ -212,14 +235,29 @@ class Parser:
     def parse_signature(self) -> TypeSig:
         fname = self.expect("IDENT").value
         self.expect("DCOLON")
-        types = []
+        arg_types = []
+        return_type = None
+
         while self.pos < len(self.tokens):
-            types.append(self.parse_type_expr())
-            if not self.match("ARROW"):
+            t = self.peek()
+            if not t or (t.col == 1 and t.kind in ("DCOLON", "KEYWORD")):
                 break
-        if len(types) == 1:
-            return TypeSig(name=fname, arg_types=[], return_type=types[0])
-        return TypeSig(name=fname, arg_types=types[:-1], return_type=types[-1])
+            if self.match("ARROW"):
+                return_type = self.parse_type_expr()
+                break
+            arg_types.append(self.parse_type_expr())
+
+        if return_type is None:
+            if len(arg_types) > 1:
+                return_type = arg_types[-1]
+                arg_types = arg_types[:-1]
+            elif len(arg_types) == 1:
+                return_type = arg_types[0]
+                arg_types = []
+            else:
+                return_type = TypeExpr(name="Void")
+
+        return TypeSig(name=fname, arg_types=arg_types, return_type=return_type)
 
     def parse_function_def(self) -> FunctionDef:
         fname_tok = self.peek()
