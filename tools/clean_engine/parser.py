@@ -240,7 +240,10 @@ class Parser:
 
         while self.pos < len(self.tokens):
             t = self.peek()
-            if not t or (t.col == 1 and t.kind in ("DCOLON", "KEYWORD")):
+            if not t:
+                break
+            # Stop if we hit a new top-level declaration at column 1 on a subsequent line
+            if len(arg_types) > 0 and t.col == 1:
                 break
             if self.match("ARROW"):
                 return_type = self.parse_type_expr()

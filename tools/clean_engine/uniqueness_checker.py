@@ -53,47 +53,42 @@ class UniquenessChecker:
                 if not isinstance(body, str):
                     continue
 
-                # Clean supports branching (| guard = expr), where each alternative branch
-                # evaluates independently. Extract separate branches.
+                # Clean supports branching (| guard = expr = default_expr)
+                import re
+                branches = []
                 if "|" in body:
-                    branches = []
-                    parts = body.split("|")
-                    for p in parts:
-                        if "=" in p:
-                            eq_parts = p.split("=")
-                            # The first part is the guard condition; subsequent parts are branch expressions
-                            for ep in eq_parts[1:]:
-                                branches.append(ep)
-                        else:
-                            branches.append(p)
-
-                    for branch in branches:
-                        tokens = [t.strip("(),;{}[]") for t in branch.split()]
-                        occ = sum(1 for t in tokens if t == var_name)
-                        if occ > 1:
-                            if branch.count(f"{{ {var_name} &") == 1 and occ <= 2:
-                                continue
-                            self.violations.append(
-                                UniquenessViolation(
-                                    function_name=fn_def.name,
-                                    var_name=var_name,
-                                    reason=f"Unique variable '{var_name}' referenced {occ} times in single branch"
-                                )
-                            )
+                    # Match guarded expression: | cond = expr1 = expr2 or multiple guards
+                    m = re.search(r'(?<!\|)\|\s*(.*?)\s*(?<![<>!=:])=\s*(.*?)\s*(?<![<>!=:])=\s*(.*)', body)
+                    if m:
+                        _, b1, b2 = m.groups()
+                        branches.append(b1)
+                        branches.append(b2)
+                    else:
+                        # Fallback split
+                        parts = re.split(r'(?<!\|)\|(?!\|)', body)
+                        for p in parts[1:]:
+                            eq_parts = re.split(r'(?<![<>!=:])\s+=\s+(?![=])', p)
+                            if len(eq_parts) > 1:
+                                branches.append(eq_parts[1])
+                            else:
+                                branches.append(p)
                 else:
-                    tokens = [t.strip("(),;{}[]") for t in body.split()]
-                    occurrences = sum(1 for t in tokens if t == var_name)
-                    if occurrences > 1:
-                        if body.count(f"{{ {var_name} &") == 1 and occurrences <= 2:
+                    branches.append(body)
+
+                for branch in branches:
+                    tokens = [t.strip("(),;{}[]") for t in branch.split()]
+                    occ = sum(1 for t in tokens if t == var_name)
+                    if occ > 1:
+                        if branch.count(f"{{ {var_name} &") == 1 and occ <= 2:
                             continue
-                        # Also check if var is threaded in a let-expression (e.g. let bm1 = ... in { bm1 & ... })
-                        if f"{var_name}." in body:
-                            # Record field access before record update
+                        if f"{var_name}." in branch:
+                            continue
+                        if f"let {var_name}" in branch or f"in {var_name}" in branch:
                             continue
                         self.violations.append(
                             UniquenessViolation(
                                 function_name=fn_def.name,
                                 var_name=var_name,
-                                reason=f"Unique variable '{var_name}' referenced {occurrences} times"
+                                reason=f"Unique variable '{var_name}' referenced {occ} times in branch '{branch[:30]}...'"
                             )
                         )
