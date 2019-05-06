@@ -53,7 +53,7 @@ class UniquenessChecker:
                 if not isinstance(body, str):
                     continue
 
-                # Clean supports branching (| guard = expr = default_expr)
+                # Clean supports branching (| guard = expr = default_expr or if cond then else)
                 import re
                 branches = []
                 if "|" in body:
@@ -72,6 +72,15 @@ class UniquenessChecker:
                                 branches.append(eq_parts[1])
                             else:
                                 branches.append(p)
+                elif "if " in body and "else" in body:
+                    # if-then-else alternative branches
+                    m_if = re.search(r'\bif\b\s*(.*?)\s*(?:\bthen\b|\()\s*(.*?)\s*\belse\b\s*(.*)', body)
+                    if m_if:
+                        _, b_then, b_else = m_if.groups()
+                        branches.append(b_then)
+                        branches.append(b_else)
+                    else:
+                        branches.append(body)
                 else:
                     branches.append(body)
 

@@ -265,6 +265,7 @@ class Parser:
     def parse_function_def(self) -> FunctionDef:
         fname_tok = self.peek()
         fname = fname_tok.value
+        fn_col = fname_tok.col
         self.pos += 1
 
         patterns = []
@@ -281,11 +282,14 @@ class Parser:
             t = self.peek()
             if not t:
                 break
-            # End of function definition when next line starts a new def/sig/decl
-            if t.col == 1 and t.kind in ("DCOLON", "KEYWORD"):
+            # A new clause of the same function at the same indentation level
+            if t.col == fn_col and len(body_tokens) > 0 and t.value == fname:
                 break
-            if t.col == 1 and len(body_tokens) > 0 and t.kind == "IDENT":
-                # Possible next function definition or clause
+            # An outer declaration at lesser indentation
+            if t.col < fn_col and len(body_tokens) > 0 and t.kind in ("IDENT", "DCOLON", "KEYWORD"):
+                break
+            # Top-level signature or keyword at column 1
+            if t.col == 1 and len(body_tokens) > 0 and t.kind in ("DCOLON", "KEYWORD", "IDENT"):
                 break
             body_tokens.append(t.value)
             self.pos += 1
