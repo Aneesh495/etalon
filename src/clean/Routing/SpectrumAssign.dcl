@@ -30,6 +30,7 @@ import Etalon.Topology.NetworkState
 }
 
 // Multi-hop intersection bitmap
+computeLinkIntersectionBitmap  :: ![LinkSpectrumState] !OpticalRoute -> SpectrumBitmap
 computeRouteIntersectionBitmap :: !WorldState !OpticalRoute -> SpectrumBitmap
 
 // Policy assignment functions

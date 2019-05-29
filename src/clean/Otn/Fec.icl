@@ -131,9 +131,9 @@ where
         encodeSubRows f row 0
     where
         encodeSubRows :: !*OtnFrame !Int !Int -> *OtnFrame
-        encodeSubRows curF r sub
+        encodeSubRows curF=:{rawBytes} r sub
             | sub >= 16 = curF
-            = let msg = [getFrameByte curF r (k * 16 + sub) \\ k <- [0..238]]
+            = let msg = [rawBytes.[r * 4080 + k * 16 + sub] \\ k <- [0..238]]
                   codeword = rsEncodeCodeword msg
                   // Scatter parity into FEC area columns (239..254) * 16 + sub
                   updatedF = scatterParity curF r sub codeword 0

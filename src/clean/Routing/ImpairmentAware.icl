@@ -77,21 +77,34 @@ where
         in max (toInt (ceil slots)) 2
 
     solveBackupPath :: !*WorldState !ServiceDemand !OpticalRoute !FrequencySlot !ModulationFormat !ReachAssessment !Lightpath !AllocationPolicy -> (*WorldState, ProvisioningResult)
-    solveBackupPath s dem primaryRoute slot mod assessment primary policy =
-        let (pRoute, bRoute) = findDisjointRoutePair s.topology dem.ingressNodeId dem.egressNodeId
-        in if (isEmpty bRoute.linkSequence)
-            (s, {
-                demandRef        = dem,
-                primaryLightpath = primary,
-                backupLightpath  = ?None,
-                assessment       = assessment,
-                isSuccessful     = False,
-                rejectionReason  = "DISJOINT_PROTECTION_UNAVAILABLE"
-            })
-            (let bSlotWidth = computeSlotWidthReq dem.requestedBitrateGbps mod
-                 bAlloc = assignSpectrumForRoute s bRoute bSlotWidth policy
-             in if (not bAlloc.success)
-                (s, {
+    solveBackupPath s=:{topology, linkSpectrums} dem primaryRoute slot mod assessment primary policy
+        = evalBackup s topology linkSpectrums (findDisjointRoutePair topology dem.ingressNodeId dem.egressNodeId)
+    where
+        evalBackup :: !*WorldState !OpticalGraph ![LinkSpectrumState] !(!OpticalRoute, !OpticalRoute) -> (*WorldState, ProvisioningResult)
+        evalBackup s g ls (pRoute, bRoute)
+            | isEmpty bRoute.linkSequence
+                = (s, {
+                    demandRef        = dem,
+                    primaryLightpath = primary,
+                    backupLightpath  = ?None,
+                    assessment       = assessment,
+                    isSuccessful     = False,
+                    rejectionReason  = "DISJOINT_PROTECTION_UNAVAILABLE"
+                })
+            = let bSlotWidth = computeSlotWidthReq dem.requestedBitrateGbps mod
+                  bBitmap = computeLinkIntersectionBitmap ls bRoute
+                  reqSlices = bSlotWidth * 2
+                  startSlice = case policy of
+                      PolicyFirstFit         -> findFirstFit bBitmap reqSlices
+                      PolicyBestFit          -> findBestFit bBitmap reqSlices
+                      PolicyExactFit         -> findExactFit bBitmap reqSlices
+                      PolicyMinFragmentation -> findMinFragFit bBitmap reqSlices
+              in evalSpectrum s dem primary assessment bRoute bSlotWidth mod startSlice
+
+        evalSpectrum :: !*WorldState !ServiceDemand !Lightpath !ReachAssessment !OpticalRoute !Int !ModulationFormat !Int -> (*WorldState, ProvisioningResult)
+        evalSpectrum s dem primary assessment bRoute bSlotWidth mod startSlice
+            | startSlice < 0
+                = (s, {
                     demandRef        = dem,
                     primaryLightpath = primary,
                     backupLightpath  = ?None,
@@ -99,16 +112,17 @@ where
                     isSuccessful     = False,
                     rejectionReason  = "BACKUP_SPECTRUM_BLOCKED"
                 })
-                (let backupLp = createLightpath (primary.pathId + 10000) dem.demandId bRoute bAlloc.allocatedSlot mod dem.preferredFec dem.requestedBitrateGbps
-                     protectedPrimary = { primary & isProtected = True }
-                 in (s, {
-                    demandRef        = dem,
-                    primaryLightpath = protectedPrimary,
-                    backupLightpath  = ?Just backupLp,
-                    assessment       = assessment,
-                    isSuccessful     = True,
-                    rejectionReason  = "NONE"
-                 })))
+            = let bSlot = createFrequencySlot startSlice bSlotWidth
+                  backupLp = createLightpath (primary.pathId + 10000) dem.demandId bRoute bSlot mod dem.preferredFec dem.requestedBitrateGbps
+                  protectedPrimary = { primary & isProtected = True }
+              in (s, {
+                 demandRef        = dem,
+                 primaryLightpath = protectedPrimary,
+                 backupLightpath  = ?Just backupLp,
+                 assessment       = assessment,
+                 isSuccessful     = True,
+                 rejectionReason  = "NONE"
+              })
 
 solveBatchDemands :: !*WorldState ![ServiceDemand] !AllocationPolicy -> (*WorldState, [ProvisioningResult])
 solveBatchDemands state demands policy =

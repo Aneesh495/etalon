@@ -14,9 +14,9 @@ import Etalon.Topology.Path
 import Etalon.Topology.NetworkState
 import Etalon.Routing.SpectrumAssign
 
-computeRouteIntersectionBitmap :: !WorldState !OpticalRoute -> SpectrumBitmap
-computeRouteIntersectionBitmap state route =
-    let linkBitmaps = [getBitmap state.linkSpectrums lId \\ lId <- route.linkSequence]
+computeLinkIntersectionBitmap :: ![LinkSpectrumState] !OpticalRoute -> SpectrumBitmap
+computeLinkIntersectionBitmap linkSpectrums route =
+    let linkBitmaps = [getBitmap linkSpectrums lId \\ lId <- route.linkSequence]
     in intersectBitmaps linkBitmaps
 where
     getBitmap :: ![LinkSpectrumState] !Int -> SpectrumBitmap
@@ -35,6 +35,10 @@ where
         let merged = [w1 bitor w2 \\ w1 <- b1.allocatedMask & w2 <- b2.allocatedMask]
             freeCount = countFreeWords merged
         in { b1 & allocatedMask = merged, freeSliceCount = freeCount }
+
+computeRouteIntersectionBitmap :: !WorldState !OpticalRoute -> SpectrumBitmap
+computeRouteIntersectionBitmap state route =
+    computeLinkIntersectionBitmap state.linkSpectrums route
 
     countFreeWords :: ![Int] -> Int
     countFreeWords words = sum [(64 - popcountInt w) \\ w <- words]

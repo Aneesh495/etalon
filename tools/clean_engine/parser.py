@@ -282,14 +282,8 @@ class Parser:
             t = self.peek()
             if not t:
                 break
-            # A new clause of the same function at the same indentation level
-            if t.col == fn_col and len(body_tokens) > 0 and t.value == fname:
-                break
-            # An outer declaration at lesser indentation
-            if t.col < fn_col and len(body_tokens) > 0 and t.kind in ("IDENT", "DCOLON", "KEYWORD"):
-                break
-            # Top-level signature or keyword at column 1
-            if t.col == 1 and len(body_tokens) > 0 and t.kind in ("DCOLON", "KEYWORD", "IDENT"):
+            # A new clause, sibling declaration, or outer declaration at or below function indentation
+            if t.col <= fn_col and len(body_tokens) > 0 and t.kind in ("IDENT", "DCOLON", "KEYWORD"):
                 break
             body_tokens.append(t.value)
             self.pos += 1
