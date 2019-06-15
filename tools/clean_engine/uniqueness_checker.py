@@ -81,6 +81,11 @@ class UniquenessChecker:
                         branches.append(b_else)
                     else:
                         branches.append(body)
+                elif "case " in body and " of" in body:
+                    # case expr of pat1 -> expr1 pat2 -> expr2
+                    case_parts = body.split("->")
+                    for cp in case_parts[1:]:
+                        branches.append(cp)
                 else:
                     branches.append(body)
 
