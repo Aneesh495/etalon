@@ -155,7 +155,7 @@ class Parser:
             sub_types = []
             while not self.match("RPAREN"):
                 sub_types.append(self.parse_type_expr())
-                if self.match("COMMA"):
+                if self.match("COMMA") or self.match("ARROW"):
                     continue
             name = "Tuple" if len(sub_types) > 1 else (sub_types[0].name if sub_types else "()")
             return TypeExpr(name=name, is_unique=is_unique, is_strict=is_strict, args=sub_types)
