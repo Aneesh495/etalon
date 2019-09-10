@@ -10,7 +10,9 @@ dist/
 *.so
 *.dylib
 *.a
-bin/
+# Binaries
+/bin/*
+!/bin/etalon-cli
 lib/
 
 # Clean compiler intermediate files
